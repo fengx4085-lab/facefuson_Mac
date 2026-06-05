@@ -1,10 +1,13 @@
 <template>
   <div class="login-view">
-    <h1 style="color: #fff">登录页</h1>
+    <BackgroundGlow />
+    <LoginCard />
   </div>
 </template>
 
 <script setup lang="ts">
+import BackgroundGlow from '@/components/BackgroundGlow.vue'
+import LoginCard from '@/components/LoginCard.vue'
 </script>
 
 <style scoped>
@@ -13,5 +16,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 </style>
