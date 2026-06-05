@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 export function useAuth() {
@@ -7,6 +7,10 @@ export function useAuth() {
   const error = ref('')
   const codeCooldown = ref(0)
   let cooldownTimer: ReturnType<typeof setInterval> | null = null
+
+  onUnmounted(() => {
+    if (cooldownTimer) clearInterval(cooldownTimer)
+  })
 
   async function sendCode(phone: string, areaCode: string): Promise<string | null> {
     error.value = ''

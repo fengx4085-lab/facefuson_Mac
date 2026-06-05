@@ -23,7 +23,7 @@
         :value="modelValue"
         placeholder="请输入手机号"
         maxlength="11"
-        @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+        @input="$emit('update:modelValue', ($event.target as HTMLInputElement).value.replace(/\D/g, ''))"
         @blur="$emit('blur')"
       />
     </div>
