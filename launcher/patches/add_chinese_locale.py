@@ -404,8 +404,10 @@ def build_nested_dict(flat_dict: dict) -> dict:
     return result
 
 
+import json
+
 def patch_locales(locales_path: Path) -> bool:
-    """在 locales.py 中添加 'zh' 中文翻译"""
+    """在 locales.py 中添加 'zh' 中文翻译 — 使用 json.dumps 生成合法代码"""
     content = locales_path.read_text(encoding="utf-8")
 
     if "'zh'" in content or '"zh"' in content:
@@ -414,28 +416,22 @@ def patch_locales(locales_path: Path) -> bool:
 
     zh_dict = build_nested_dict(ZH_TRANSLATIONS)
 
-    import pprint
-    zh_block = pprint.pformat(zh_dict, indent=2, width=120, sort_dicts=False)
+    # 使用 json.dumps 生成合法的 Python dict 字面量
+    # json 与 Python 语法兼容，只需将 true/false 转为 True/False
+    zh_block = json.dumps(zh_dict, indent=2, ensure_ascii=False)
+    zh_block = zh_block.replace("true", "True").replace("false", "False").replace("null", "None")
 
-    # 在最后的 } 之前插入
-    # locales.py 结构: LOCALES : Locales = { 'en': { ... } }
-    # 需要在 'en' 的整个块后面追加 'zh' 条目
-
-    # 策略：找到最后的 '},' 后跟换行和 '}' 的位置
-    # 更简单的方法：在末尾 } 之前追加
-
+    # 找到 LOCALES = { 后，'en': { ... } 的结束位置
+    # 策略：找到文件末尾最后一个 '}' 的行，在它前面插入 'zh': ...,
     lines = content.splitlines()
     new_lines = []
     inserted = False
-    depth = 0
 
     for i, line in enumerate(lines):
         new_lines.append(line)
-        # 当回到第0层缩进且遇到单独的 } 时，在其前面插入 zh
         if not inserted:
             stripped = line.strip()
             if stripped == "}" and not inserted:
-                # 这是 LOCALES 的闭合括号
                 new_lines.insert(-1, "")
                 new_lines.insert(-1, "\t" + '"zh": ' + zh_block.replace("\n", "\n\t").rstrip() + ",")
                 new_lines.insert(-1, "")
