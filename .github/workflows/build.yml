@@ -1,4 +1,4 @@
-name: Build FaceFusion4.8 DMG
+name: "Build FaceFusion4.8 DMG"
 
 on:
   workflow_dispatch:
