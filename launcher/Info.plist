@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>FaceFusionLauncher</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.facefusion.gold-4-8</string>
+    <key>CFBundleName</key>
+    <string>FaceFusion4.8</string>
+    <key>CFBundleDisplayName</key>
+    <string>FaceFusion4.8 黄金定制版</string>
+    <key>CFBundleVersion</key>
+    <string>4.8.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>4.8</string>
+    <key>CFBundleIconFile</key>
+    <string>icon.icns</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>LSRequiresNativeExecution</key>
+    <true/>
+    <key>LSArchitecturePriority</key>
+    <array>
+        <string>arm64</string>
+    </array>
+</dict>
+</plist>

@@ -1,3 +1,41 @@
 node_modules
 dist
 .env
+
+# Build artifacts
+/output/
+/build/
+/app/
+
+# FaceFusion models (downloaded at build time)
+/models/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+*.egg
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary
+*.tmp
+*.temp
+*.log
+/tmp/
+
+# FaceFusion large files — keep source, not models
+/facefusion-master/.assets/
