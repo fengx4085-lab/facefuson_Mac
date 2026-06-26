@@ -33,9 +33,7 @@ echo "  Python 源路径: $PYTHON_SRC"
 mkdir -p "$RESOURCES/python"
 cp -r "$PYTHON_SRC"/* "$RESOURCES/python/" 2>/dev/null || \
   cp -r "$(dirname "$(which python3)")/../"* "$RESOURCES/python/"
-# 确保 python3 可执行
 if [ ! -f "$RESOURCES/python/bin/python3" ]; then
-  # 回退：直接用系统 python，setup-python 安装的
   mkdir -p "$RESOURCES/python/bin"
   cp "$(which python3)" "$RESOURCES/python/bin/python3"
 fi
@@ -66,32 +64,27 @@ echo "  安装 PyInstaller (构建工具)..."
 "$VENV_PIP" install --quiet pyinstaller
 
 # ══════════════════════════════════════════════════════
-# Step 3: 准备 FaceFusion 源码 + 补丁
+# Step 3: 准备 FaceFusion 源码 + 中文化
 # ══════════════════════════════════════════════════════
 echo "[3/8] 准备 FaceFusion 源码..."
 cp -r "$WORK_DIR/facefusion-master" "$RESOURCES/facefusion"
 
-# 应用中文化补丁 (直接覆盖，不注入)
-echo "  应用中文化补丁..."
+echo "  应用中文化补丁 (覆盖 locales.py)..."
 cp "$WORK_DIR/launcher/patches/locales_with_zh.py" "$RESOURCES/facefusion/facefusion/locales.py"
 
 # ══════════════════════════════════════════════════════
 # Step 4: 预下载 AI 模型
 # ══════════════════════════════════════════════════════
 echo "[4/8] 预下载 AI 模型 (约 2.5 GB，需耐心等待)..."
-# 设置 PATH 以便找到 ffmpeg/curl（暂时用系统的）
 export PATH="$RESOURCES:$PATH"
 cd "$RESOURCES/facefusion"
 "$VENV_PYTHON" facefusion.py force-download
 echo "  模型下载完成"
 
 # ══════════════════════════════════════════════════════
-# Step 5: 下载 ffmpeg + curl 静态二进制
+# Step 5: 下载 ffmpeg + curl
 # ══════════════════════════════════════════════════════
-echo "[5/8] 下载 ffmpeg + curl 静态二进制..."
-
-# ffmpeg (使用 brew 安装的或预先编译的 arm64 版本)
-brew install ffmpeg curl 2>/dev/null || true
+echo "[5/8] 准备 ffmpeg + curl..."
 cp "$(which ffmpeg)" "$RESOURCES/ffmpeg" 2>/dev/null || \
     curl -fsSL "https://osx-universal-binary.static.ffmpeg.org/ffmpeg" -o "$RESOURCES/ffmpeg"
 chmod +x "$RESOURCES/ffmpeg" 2>/dev/null || true
@@ -108,7 +101,12 @@ echo "  curl:   $($RESOURCES/curl --version 2>&1 | head -1 || echo 'ok')"
 echo "[6/8] 编译启动器 (PyInstaller)..."
 cd "$WORK_DIR"
 
-# 创建 .spec 文件
+# 图标处理：没有就跳过
+ICON_LINE=""
+if [ -f "$WORK_DIR/assets/icon.icns" ]; then
+	ICON_LINE="icon='$WORK_DIR/assets/icon.icns',"
+fi
+
 cat > /tmp/launcher.spec <<SPEC
 # -*- mode: python -*-
 a = Analysis(
@@ -148,7 +146,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='FaceFusion.app',
-    icon='$WORK_DIR/assets/icon.icns',
+    ${ICON_LINE}
     bundle_identifier='com.facefusion.gold-4-8',
     info_plist={
         'CFBundleName': 'FaceFusion4.8',
@@ -169,9 +167,6 @@ SPEC
 # ══════════════════════════════════════════════════════
 echo "[7/8] 组装 .app Bundle..."
 
-# 如果 PyInstaller 的 BUNDLE 模式没有生成完整结构，我们手动组装
-# 把 PyInstaller 的可执行文件放到我们的 Bundle 中
-
 PYI_EXE="$(find "$BUILD_DIR/pyinstaller_dist" -name FaceFusionLauncher -type f | head -1)"
 
 if [ -n "$PYI_EXE" ]; then
@@ -179,13 +174,12 @@ if [ -n "$PYI_EXE" ]; then
     chmod +x "$MACOS/FaceFusionLauncher"
     echo "  可执行文件: $MACOS/FaceFusionLauncher"
 else
-    # 回退：直接拷贝 .spec 的 COLLECT 结果
-    echo "  ⚠ BUNDLE 模式不可用，使用手动组装"
+    echo "  WARNING: BUNDLE 模式不可用，使用手动组装"
     cp "$WORK_DIR/launcher/launcher.py" "$MACOS/FaceFusionLauncher.py"
 fi
 
-# 复制图标
-cp "$WORK_DIR/assets/icon.icns" "$RESOURCES/icon.icns" 2>/dev/null || echo "  (图标文件稍后准备)"
+# 复制图标 (放错地方也不影响运行)
+cp "$WORK_DIR/assets/icon.icns" "$RESOURCES/icon.icns" 2>/dev/null || echo "  (图标文件暂缺，使用默认)"
 
 # 复制 Info.plist
 cp "$WORK_DIR/launcher/Info.plist" "$APP_DIR/Contents/Info.plist"
@@ -203,7 +197,6 @@ ln -sf /Applications "$DMG_DIR/Applications"
 
 DMG_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.dmg"
 
-# 如果有 create-dmg 就用，否则用原生 hdiutil
 if command -v create-dmg &>/dev/null; then
     create-dmg \
         --volname "FaceFusion4.8" \
