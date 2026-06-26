@@ -71,10 +71,9 @@ echo "  安装 PyInstaller (构建工具)..."
 echo "[3/8] 准备 FaceFusion 源码..."
 cp -r "$WORK_DIR/facefusion-master" "$RESOURCES/facefusion"
 
-# 应用中文化补丁
+# 应用中文化补丁 (直接覆盖，不注入)
 echo "  应用中文化补丁..."
-cd "$RESOURCES/facefusion"
-"$VENV_PYTHON" "$WORK_DIR/launcher/patches/add_chinese_locale.py" facefusion
+cp "$WORK_DIR/launcher/patches/locales_with_zh.py" "$RESOURCES/facefusion/facefusion/locales.py"
 
 # ══════════════════════════════════════════════════════
 # Step 4: 预下载 AI 模型
