@@ -4,12 +4,12 @@ FaceFusion 3.6.1 中文化补丁
 在 facefusion/facefusion/locales.py 中添加 'zh' (中文) 语言条目
 """
 
+import json
 import re
 import sys
 from pathlib import Path
 
 # ── 中文翻译映射 (英文 key → 中文翻译) ────────────────────
-# 基于 facefusionchines/wording.py 适配至 3.6.1
 
 ZH_TRANSLATIONS = {
     # ── 系统和安装 ──
@@ -300,103 +300,98 @@ ZH_TRANSLATIONS = {
 }
 
 
-def build_nested_dict(flat_dict: dict) -> dict:
-    """
-    将扁平化的翻译 key → 值 结构重建为 FaceFusion 的嵌套结构：
-    - 顶层通用 key
-    - 'help' 子字典 (install_dependency, skip_conda, ...)
-    - 'about' 子字典 (fund, subscribe, join)
-    - 'uis' 子字典 (apply_button, start_button, ...)
-    """
-    help_keys = {
-        "install_dependency", "skip_conda", "config_path", "temp_path",
-        "jobs_path", "source_paths", "target_path", "output_path",
-        "face_detector_model", "face_detector_size", "face_detector_margin",
-        "face_detector_angles", "face_detector_score", "face_landmarker_model",
-        "face_landmarker_score", "face_selector_mode", "face_selector_order",
-        "face_selector_age_start", "face_selector_age_end",
-        "face_selector_gender", "face_selector_race",
-        "reference_face_position", "reference_face_distance",
-        "reference_frame_number", "face_occluder_model", "face_parser_model",
-        "face_mask_types", "face_mask_areas", "face_mask_regions",
-        "face_mask_blur", "face_mask_padding", "voice_extractor_model",
-        "trim_frame_start", "trim_frame_end", "temp_frame_format",
-        "keep_temp", "output_image_quality", "output_image_scale",
-        "output_audio_encoder", "output_audio_quality", "output_audio_volume",
-        "output_video_encoder", "output_video_preset", "output_video_quality",
-        "output_video_scale", "output_video_fps", "processors",
-        "open_browser", "ui_layouts", "ui_workflow", "download_providers",
-        "download_scope", "benchmark_mode", "benchmark_resolutions",
-        "benchmark_cycle_count", "execution_device_ids", "execution_providers",
-        "execution_thread_count", "video_memory_strategy",
-        "system_memory_limit", "log_level", "halt_on_error", "run",
-        "headless_run", "batch_run", "force_download", "benchmark",
-        "job_id", "job_status", "step_index", "job_list", "job_create",
-        "job_submit", "job_submit_all", "job_delete", "job_delete_all",
-        "job_add_step", "job_remix_step", "job_insert_step",
-        "job_remove_step", "job_run", "job_run_all", "job_retry",
-        "job_retry_all", "source_pattern", "target_pattern",
-        "output_pattern", "background-remover-model",
-        "background-remover-color", "face_editor_model",
-        "face_editor_eyebrow_direction", "face_editor_eye_gaze_horizontal",
-        "face_editor_eye_gaze_vertical", "face_editor_eye_open_ratio",
-        "face_editor_lip_open_ratio", "face_editor_mouth_grim",
-        "face_editor_mouth_pout", "face_editor_mouth_purse",
-        "face_editor_mouth_smile", "face_editor_head_pitch",
-        "face_editor_head_yaw", "face_editor_head_roll",
-    }
+HELP_KEYS = {
+    "install_dependency", "skip_conda", "config_path", "temp_path",
+    "jobs_path", "source_paths", "target_path", "output_path",
+    "face_detector_model", "face_detector_size", "face_detector_margin",
+    "face_detector_angles", "face_detector_score", "face_landmarker_model",
+    "face_landmarker_score", "face_selector_mode", "face_selector_order",
+    "face_selector_age_start", "face_selector_age_end",
+    "face_selector_gender", "face_selector_race",
+    "reference_face_position", "reference_face_distance",
+    "reference_frame_number", "face_occluder_model", "face_parser_model",
+    "face_mask_types", "face_mask_areas", "face_mask_regions",
+    "face_mask_blur", "face_mask_padding", "voice_extractor_model",
+    "trim_frame_start", "trim_frame_end", "temp_frame_format",
+    "keep_temp", "output_image_quality", "output_image_scale",
+    "output_audio_encoder", "output_audio_quality", "output_audio_volume",
+    "output_video_encoder", "output_video_preset", "output_video_quality",
+    "output_video_scale", "output_video_fps", "processors",
+    "open_browser", "ui_layouts", "ui_workflow", "download_providers",
+    "download_scope", "benchmark_mode", "benchmark_resolutions",
+    "benchmark_cycle_count", "execution_device_ids", "execution_providers",
+    "execution_thread_count", "video_memory_strategy",
+    "system_memory_limit", "log_level", "halt_on_error", "run",
+    "headless_run", "batch_run", "force_download", "benchmark",
+    "job_id", "job_status", "step_index", "job_list", "job_create",
+    "job_submit", "job_submit_all", "job_delete", "job_delete_all",
+    "job_add_step", "job_remix_step", "job_insert_step",
+    "job_remove_step", "job_run", "job_run_all", "job_retry",
+    "job_retry_all", "source_pattern", "target_pattern",
+    "output_pattern", "background-remover-model",
+    "background-remover-color", "face_editor_model",
+    "face_editor_eyebrow_direction", "face_editor_eye_gaze_horizontal",
+    "face_editor_eye_gaze_vertical", "face_editor_eye_open_ratio",
+    "face_editor_lip_open_ratio", "face_editor_mouth_grim",
+    "face_editor_mouth_pout", "face_editor_mouth_purse",
+    "face_editor_mouth_smile", "face_editor_head_pitch",
+    "face_editor_head_yaw", "face_editor_head_roll",
+}
 
-    about_keys = {"fund", "subscribe", "join"}
+ABOUT_KEYS = {"fund", "subscribe", "join"}
 
-    uis_keys = {
-        "apply_button", "benchmark_mode_dropdown",
-        "benchmark_cycle_count_slider", "benchmark_resolutions_checkbox_group",
-        "clear_button", "common_options_checkbox_group",
-        "download_providers_checkbox_group",
-        "execution_providers_checkbox_group", "execution_thread_count_slider",
-        "face_detector_angles_checkbox_group", "face_detector_model_dropdown",
-        "face_detector_margin_slider", "face_detector_score_slider",
-        "face_detector_size_dropdown", "face_landmarker_model_dropdown",
-        "face_landmarker_score_slider", "face_mask_blur_slider",
-        "face_mask_padding_bottom_slider", "face_mask_padding_left_slider",
-        "face_mask_padding_right_slider", "face_mask_padding_top_slider",
-        "face_mask_areas_checkbox_group", "face_mask_regions_checkbox_group",
-        "face_mask_types_checkbox_group", "face_selector_age_range_slider",
-        "face_selector_gender_dropdown", "face_selector_mode_dropdown",
-        "face_selector_order_dropdown", "face_selector_race_dropdown",
-        "face_occluder_model_dropdown", "face_parser_model_dropdown",
-        "voice_extractor_model_dropdown", "job_list_status_checkbox_group",
-        "job_manager_job_action_dropdown", "job_manager_job_id_dropdown",
-        "job_manager_step_index_dropdown", "job_runner_job_action_dropdown",
-        "job_runner_job_id_dropdown", "log_level_dropdown",
-        "output_audio_encoder_dropdown", "output_audio_quality_slider",
-        "output_audio_volume_slider", "output_image_or_video",
-        "output_image_quality_slider", "output_image_scale_slider",
-        "output_path_textbox", "output_video_encoder_dropdown",
-        "output_video_fps_slider", "output_video_preset_dropdown",
-        "output_video_quality_slider", "output_video_scale_slider",
-        "preview_frame_slider", "preview_image", "preview_mode_dropdown",
-        "preview_resolution_dropdown", "processors_checkbox_group",
-        "reference_face_distance_slider", "reference_face_gallery",
-        "refresh_button", "source_file", "start_button", "stop_button",
-        "system_memory_limit_slider", "target_file",
-        "temp_frame_format_dropdown", "terminal_textbox", "trim_frame_slider",
-        "ui_workflow", "video_memory_strategy_dropdown", "webcam_fps_slider",
-        "webcam_image", "webcam_device_id_dropdown", "webcam_mode_radio",
-        "webcam_resolution_dropdown",
-    }
+UIS_KEYS = {
+    "apply_button", "benchmark_mode_dropdown",
+    "benchmark_cycle_count_slider", "benchmark_resolutions_checkbox_group",
+    "clear_button", "common_options_checkbox_group",
+    "download_providers_checkbox_group",
+    "execution_providers_checkbox_group", "execution_thread_count_slider",
+    "face_detector_angles_checkbox_group", "face_detector_model_dropdown",
+    "face_detector_margin_slider", "face_detector_score_slider",
+    "face_detector_size_dropdown", "face_landmarker_model_dropdown",
+    "face_landmarker_score_slider", "face_mask_blur_slider",
+    "face_mask_padding_bottom_slider", "face_mask_padding_left_slider",
+    "face_mask_padding_right_slider", "face_mask_padding_top_slider",
+    "face_mask_areas_checkbox_group", "face_mask_regions_checkbox_group",
+    "face_mask_types_checkbox_group", "face_selector_age_range_slider",
+    "face_selector_gender_dropdown", "face_selector_mode_dropdown",
+    "face_selector_order_dropdown", "face_selector_race_dropdown",
+    "face_occluder_model_dropdown", "face_parser_model_dropdown",
+    "voice_extractor_model_dropdown", "job_list_status_checkbox_group",
+    "job_manager_job_action_dropdown", "job_manager_job_id_dropdown",
+    "job_manager_step_index_dropdown", "job_runner_job_action_dropdown",
+    "job_runner_job_id_dropdown", "log_level_dropdown",
+    "output_audio_encoder_dropdown", "output_audio_quality_slider",
+    "output_audio_volume_slider", "output_image_or_video",
+    "output_image_quality_slider", "output_image_scale_slider",
+    "output_path_textbox", "output_video_encoder_dropdown",
+    "output_video_fps_slider", "output_video_preset_dropdown",
+    "output_video_quality_slider", "output_video_scale_slider",
+    "preview_frame_slider", "preview_image", "preview_mode_dropdown",
+    "preview_resolution_dropdown", "processors_checkbox_group",
+    "reference_face_distance_slider", "reference_face_gallery",
+    "refresh_button", "source_file", "start_button", "stop_button",
+    "system_memory_limit_slider", "target_file",
+    "temp_frame_format_dropdown", "terminal_textbox", "trim_frame_slider",
+    "ui_workflow", "video_memory_strategy_dropdown", "webcam_fps_slider",
+    "webcam_image", "webcam_device_id_dropdown", "webcam_mode_radio",
+    "webcam_resolution_dropdown",
+}
 
+
+def build_zh_dict() -> dict:
+    """将扁平化的翻译重建为 FaceFusion 的嵌套结构"""
     result = {}
     result["help"] = {}
     result["about"] = {}
     result["uis"] = {}
 
-    for key, value in flat_dict.items():
-        if key in help_keys:
+    for key, value in ZH_TRANSLATIONS.items():
+        if key in HELP_KEYS:
             result["help"][key] = value
-        elif key in about_keys:
+        elif key in ABOUT_KEYS:
             result["about"][key] = value
-        elif key in uis_keys:
+        elif key in UIS_KEYS:
             result["uis"][key] = value
         else:
             result[key] = value
@@ -404,46 +399,81 @@ def build_nested_dict(flat_dict: dict) -> dict:
     return result
 
 
-import json
+def format_python_dict(d, indent_level=1) -> str:
+    """生成合法的 Python dict 字面量字符串 (用 json.dumps + 替换以确保兼容)"""
+    text = json.dumps(d, indent=2, ensure_ascii=False)
+
+    # JSON 的 true/false/null → Python 的 True/False/None
+    text = text.replace(": true", ": True")
+    text = text.replace(": false", ": False")
+    text = text.replace(": null", ": None")
+
+    return text
+
 
 def patch_locales(locales_path: Path) -> bool:
-    """在 locales.py 中添加 'zh' 中文翻译 — 使用 json.dumps 生成合法代码"""
+    """在 locales.py 中添加 'zh' 中文翻译"""
     content = locales_path.read_text(encoding="utf-8")
 
     if "'zh'" in content or '"zh"' in content:
         print("  ✓ 中文语言已存在，跳过")
         return True
 
-    zh_dict = build_nested_dict(ZH_TRANSLATIONS)
+    zh_dict = build_zh_dict()
+    zh_block = format_python_dict(zh_dict)
 
-    # 使用 json.dumps 生成合法的 Python dict 字面量
-    # json 与 Python 语法兼容，只需将 true/false 转为 True/False
-    zh_block = json.dumps(zh_dict, indent=2, ensure_ascii=False)
-    zh_block = zh_block.replace("true", "True").replace("false", "False").replace("null", "None")
+    # 验证生成的代码语法正确
+    try:
+        compile("test_data = " + zh_block, "<test>", "exec")
+    except SyntaxError as e:
+        print(f"  ✗ 生成的 Python 代码有语法错误: {e}")
+        return False
 
-    # 找到 LOCALES = { 后，'en': { ... } 的结束位置
-    # 策略：找到文件末尾最后一个 '}' 的行，在它前面插入 'zh': ...,
+    # 读取源码，在文件末尾的 } 前插入 zh 条目
     lines = content.splitlines()
     new_lines = []
     inserted = False
 
     for i, line in enumerate(lines):
         new_lines.append(line)
-        if not inserted:
-            stripped = line.strip()
-            if stripped == "}" and not inserted:
-                new_lines.insert(-1, "")
-                new_lines.insert(-1, "\t" + '"zh": ' + zh_block.replace("\n", "\n\t").rstrip() + ",")
-                new_lines.insert(-1, "")
-                inserted = True
+        if not inserted and line.strip() == "}" and i > len(lines) * 0.9:
+            # 这是 LOCALES 最外层的闭合括号 (文件末尾)
+            indent = line[:len(line) - len(line.lstrip())]
+            new_lines.insert(-1, "")
+            for j, zline in enumerate(zh_block.splitlines()):
+                if j == 0:
+                    new_lines.insert(-1, indent + '"zh": ' + zline + ",")
+                else:
+                    new_lines.insert(-1, indent + zline)
+            new_lines.insert(-1, "")
+            inserted = True
 
-    if inserted:
-        locales_path.write_text("\n".join(new_lines), encoding="utf-8")
-        print(f"  ✓ 已添加中文翻译至 {locales_path}")
-        return True
+    if not inserted:
+        print("  ✗ 未能定位插入点，请手动检查")
+        return False
 
-    print("  ✗ 未能定位插入点，请手动检查")
-    return False
+    result = "\n".join(new_lines)
+
+    # 再次验证整个文件语法正确
+    try:
+        compile(result, str(locales_path), "exec")
+    except SyntaxError as e:
+        print(f"  ✗ 修改后的 locales.py 有语法错误: {e}")
+
+        # 写出错误内容供排查
+        debug_path = locales_path.with_suffix(".debug.py")
+        debug_path.write_text(result, encoding="utf-8")
+        print(f"  ✗ 调试文件已写入: {debug_path}")
+
+        # 打印注入了 zh 的那一段
+        zh_start = result.index('"zh":')
+        context = result[max(0, zh_start - 100):zh_start + 500]
+        print(f"  ✗ 注入点上下文:\n{context}")
+        return False
+
+    locales_path.write_text(result, encoding="utf-8")
+    print(f"  ✓ 已添加中文翻译至 {locales_path}")
+    return True
 
 
 def main():
@@ -453,7 +483,8 @@ def main():
 
     if locales_main.exists():
         print("[1/1] 主 locales.py → 添加 'zh'")
-        patch_locales(locales_main)
+        if not patch_locales(locales_main):
+            sys.exit(1)
     else:
         print(f"✗ 找不到 {locales_main}")
         sys.exit(1)
