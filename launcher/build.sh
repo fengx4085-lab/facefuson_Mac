@@ -7,7 +7,7 @@ set -euo pipefail
 
 # ── 配置 ────────────────────────────────────────────
 PYTHON_VERSION="3.12.11"
-PYTHON_URL="https://github.com/indygreg/python-build-standalone/releases/download/20251015/cpython-${PYTHON_VERSION}+20251015-aarch64-apple-darwin-install_only.tar.gz"
+PYTHON_URL="https://github.com/astral-sh/python-build-standalone/releases/download/20251015/cpython-${PYTHON_VERSION}%2B20251015-aarch64-apple-darwin-install_only.tar.gz"
 FFMPEG_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/osx-arm64"
 CURL_URL="https://curl.se/download/curl-8.12.1.tar.xz"
 
