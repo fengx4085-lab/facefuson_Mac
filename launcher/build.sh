@@ -6,10 +6,7 @@
 set -euo pipefail
 
 # ── 配置 ────────────────────────────────────────────
-PYTHON_VERSION="3.12.11"
-PYTHON_URL="https://github.com/astral-sh/python-build-standalone/releases/download/20251015/cpython-${PYTHON_VERSION}%2B20251015-aarch64-apple-darwin-install_only.tar.gz"
 FFMPEG_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/osx-arm64"
-CURL_URL="https://curl.se/download/curl-8.12.1.tar.xz"
 
 WORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$WORK_DIR/build"
@@ -28,12 +25,20 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$RESOURCES" "$MACOS"
 
 # ══════════════════════════════════════════════════════
-# Step 1: 下载 portable Python 3.12
+# Step 1: 拷贝 setup-python 提供的 Python 3.12
 # ══════════════════════════════════════════════════════
-echo "[1/8] 下载 portable Python ${PYTHON_VERSION}..."
-curl -fsSL "$PYTHON_URL" -o /tmp/python.tar.gz
+echo "[1/8] 准备 Python 3.12..."
+PYTHON_SRC="${SETUP_PYTHON_PATH:-$(dirname "$(which python3)")/..}"
+echo "  Python 源路径: $PYTHON_SRC"
 mkdir -p "$RESOURCES/python"
-tar xzf /tmp/python.tar.gz -C "$RESOURCES/python"
+cp -r "$PYTHON_SRC"/* "$RESOURCES/python/" 2>/dev/null || \
+  cp -r "$(dirname "$(which python3)")/../"* "$RESOURCES/python/"
+# 确保 python3 可执行
+if [ ! -f "$RESOURCES/python/bin/python3" ]; then
+  # 回退：直接用系统 python，setup-python 安装的
+  mkdir -p "$RESOURCES/python/bin"
+  cp "$(which python3)" "$RESOURCES/python/bin/python3"
+fi
 PYTHON_BIN="$RESOURCES/python/bin/python3"
 echo "  Python: $($PYTHON_BIN --version 2>&1)"
 

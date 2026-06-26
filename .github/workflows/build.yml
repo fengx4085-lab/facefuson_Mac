@@ -15,15 +15,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - name: Setup Homebrew
         run: |
-          brew install create-dmg ffmpeg curl 2>/dev/null || true
-
-      - name: Cache Python standalone
-        uses: actions/cache@v4
-        with:
-          path: /tmp/python-standalone
-          key: python-standalone-3.12.11-arm64
+          brew install create-dmg ffmpeg curl python-tk@3.12 2>/dev/null || true
 
       - name: Cache FaceFusion models
         uses: actions/cache@v4
@@ -35,6 +34,8 @@ jobs:
         run: |
           chmod +x launcher/build.sh
           bash launcher/build.sh
+        env:
+          SETUP_PYTHON_PATH: ${{ env.pythonLocation }}
 
       - name: Upload DMG
         uses: actions/upload-artifact@v4
