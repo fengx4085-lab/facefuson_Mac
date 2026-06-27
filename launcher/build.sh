@@ -2,56 +2,24 @@
 # ───────────────────────────────────────────────────────
 # FaceFusion4.8 黄金定制版 — macOS 构建脚本
 # 在 GitHub Actions macos-latest runner 上运行
-#
-# 核心策略：直接在挂载的稀疏磁盘镜像中构建 .app，避免 cp 和
-# hdiutil -srcfolder 产生第二份副本。构建完成后分离镜像，转换
-# 为压缩 DMG。整个过程只有一份数据。
 # ───────────────────────────────────────────────────────
 set -euo pipefail
 
 WORK_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_DIR="$WORK_DIR/build"
+APP_DIR="$BUILD_DIR/FaceFusion.app"
+RESOURCES="$APP_DIR/Contents/Resources"
+MACOS="$APP_DIR/Contents/MacOS"
+CACHE_DIR="$WORK_DIR/facefusion-master/.assets"
 
 echo "==================================================="
 echo " FaceFusion4.8 DMG 构建"
 echo " 工作目录: $WORK_DIR"
 echo "==================================================="
 
-# ── 估算 DMG 大小，创建稀疏镜像 ─────────────────────
-# 先用 df 算当前可用空间，留 5 GB 余量
-AVAIL_GB=$(df -g / | tail -1 | awk '{print $4}')
-DMG_SIZE_GB=$(( AVAIL_GB - 5 ))
-echo "  可用: ${AVAIL_GB} GiB → DMG 镜像: ${DMG_SIZE_GB} GiB"
-
-DMG_SPARSE="$BUILD_DIR/build.sparseimage"
-VOLUME="/Volumes/FaceFusionBuild"
+# ── 清理旧构建 ─────────────────────────────────────
 rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
-
-hdiutil create \
-    -size "${DMG_SIZE_GB}g" \
-    -fs "Case-sensitive APFS" \
-    -type SPARSE \
-    -volname "FaceFusionBuild" \
-    "$DMG_SPARSE"
-
-hdiutil attach "$DMG_SPARSE" -noverify -mountpoint "$VOLUME"
-echo "  镜像已挂载于 $VOLUME"
-
-# ── 在镜像内建立 .app 骨架 ────────────────────────────
-APP_DIR="$VOLUME/FaceFusion.app"
-RESOURCES="$APP_DIR/Contents/Resources"
-MACOS="$APP_DIR/Contents/MacOS"
-DMG_STAGING="$VOLUME/dmg_staging"
-
 mkdir -p "$RESOURCES" "$MACOS"
-
-# 清理函数：无论成功失败都要卸载
-cleanup() {
-    echo "  卸载镜像..."
-    hdiutil detach "$VOLUME" -force 2>/dev/null || true
-}
-trap cleanup EXIT
 
 # ══════════════════════════════════════════════════════
 # Step 1: 拷贝 Python 3.12
@@ -92,6 +60,10 @@ echo "  安装 FaceFusion 依赖..."
 echo "  安装 PyInstaller (构建工具)..."
 "$VENV_PIP" install --quiet pyinstaller
 
+# 清理 pip 缓存
+"$VENV_PIP" cache purge -q 2>/dev/null || true
+rm -rf "$RESOURCES/venv/lib/python3.12/site-packages/pip" 2>/dev/null || true
+
 # ══════════════════════════════════════════════════════
 # Step 3: FaceFusion 源码 + 中文化
 # ══════════════════════════════════════════════════════
@@ -102,14 +74,21 @@ echo "  应用中文化补丁..."
 cp "$WORK_DIR/launcher/patches/locales_with_zh.py" "$RESOURCES/facefusion/facefusion/locales.py"
 
 # ══════════════════════════════════════════════════════
-# Step 4: 预下载 AI 模型
+# Step 4: 预下载 AI 模型（用 symlink 避免复制）
 # ══════════════════════════════════════════════════════
 echo "[4/8] 预下载 AI 模型..."
-MODEL_DIR="$RESOURCES/facefusion/.assets/models"
-CACHE_DIR="$WORK_DIR/facefusion-master/.assets"
 
-if [ -d "$CACHE_DIR/models" ] && [ "$(ls -1 "$CACHE_DIR/models" 2>/dev/null | wc -l)" -gt 0 ]; then
-    echo "  检测到缓存模型 ($(du -sh "$CACHE_DIR/models" | cut -f1))，将跳过已下载文件"
+ASSETS_LINK="$RESOURCES/facefusion/.assets"
+MODEL_DIR="$ASSETS_LINK/models"
+mkdir -p "$CACHE_DIR"
+
+# 用 symlink 让 force-download 直接写入缓存目录，不产生副本
+if [ ! -d "$ASSETS_LINK" ] && [ ! -L "$ASSETS_LINK" ]; then
+    ln -sf "$CACHE_DIR" "$ASSETS_LINK"
+fi
+
+if [ -d "$MODEL_DIR" ] && [ "$(ls -1 "$MODEL_DIR" 2>/dev/null | wc -l)" -gt 0 ]; then
+    echo "  检测到缓存模型 ($(du -sh "$MODEL_DIR" | cut -f1))，将跳过已下载文件"
 fi
 
 export PATH="$RESOURCES:$PATH"
@@ -117,10 +96,9 @@ cd "$RESOURCES/facefusion"
 "$VENV_PYTHON" facefusion.py force-download
 echo "  模型下载完成 → $(du -sh "$MODEL_DIR" | cut -f1)"
 
-# 写回缓存，下次命中
-mkdir -p "$CACHE_DIR"
-cp -r "$MODEL_DIR" "$CACHE_DIR/"
-echo "  模型已同步至缓存目录"
+# 模型已在缓存中（symlink 写入），无需额外复制
+echo "  disk usage:"
+df -h / | tail -1
 
 # ══════════════════════════════════════════════════════
 # Step 5: ffmpeg + curl
@@ -202,7 +180,7 @@ SPEC
 
 "$VENV_PYTHON" -m PyInstaller /tmp/launcher.spec \
     --distpath "$BUILD_DIR/pyinstaller_dist" \
-    --workpath "$VOLUME/pyi_build" \
+    --workpath /tmp/pyi_build \
     --clean --noconfirm 2>&1 | tail -5
 
 # ══════════════════════════════════════════════════════
@@ -226,62 +204,60 @@ cp "$WORK_DIR/launcher/Info.plist" "$APP_DIR/Contents/Info.plist"
 echo "  Bundle 组装完成"
 
 # ══════════════════════════════════════════════════════
-# Step 8: 清理 → 组装 DMG staging → 卸载 → 创建 DMG
+# Step 8: 清理 → 解决 symlink → 打包
 # ══════════════════════════════════════════════════════
 echo "[8/8] 制作 DMG..."
 
-# 清理一切可以删的
-rm -rf /tmp/pyi_build "$BUILD_DIR/pyinstaller_dist"
-rm -rf "$VOLUME/pyi_build"
+# 清理
+rm -rf /tmp/pyi_build "$BUILD_DIR/pyinstaller_dist" /tmp/launcher.spec
 find "$RESOURCES/venv" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 find "$RESOURCES/facefusion" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
-rm -rf "$RESOURCES/venv/share" 2>/dev/null || true
-rm -rf /tmp/launcher.spec
 
-echo "=== 镜像用量 ==="
-df -h "$VOLUME" | tail -1
-echo "=== Runner 剩余 ==="
+# 关键：.assets 是 symlink 指向 cache → 改为真实目录让 DMG 可以跟随
+# (hdiutil -srcfolder 不跟随外部 symlink)
+echo "  固化模型目录..."
+if [ -L "$ASSETS_LINK" ]; then
+    ACTUAL_CACHE="$(readlink "$ASSETS_LINK")"
+    rm -f "$ASSETS_LINK"
+    mkdir -p "$ASSETS_LINK"
+    # 硬链接到 cache（瞬间完成，不占额外空间）
+    cp -Rl "$ACTUAL_CACHE"/* "$ASSETS_LINK/" 2>/dev/null || cp -R "$ACTUAL_CACHE"/* "$ASSETS_LINK/"
+fi
+
+# 模型已在 .app 内固化，删除缓存释放空间
+rm -rf "$CACHE_DIR"/models 2>/dev/null || true
+
+echo "=== 剩余空间 ==="
 df -h / | tail -1
+du -sh "$APP_DIR" 2>/dev/null | awk '{print "  .app: " $1}'
 
-# 准备 DMG staging（同文件系统内 mv = 重命名，不占额外空间）
-mkdir -p "$DMG_STAGING"
-mv "$APP_DIR" "$DMG_STAGING/"
-ln -sf /Applications "$DMG_STAGING/Applications"
-
-# 卸载镜像
-trap - EXIT
-echo "  分离镜像..."
-hdiutil detach "$VOLUME" -force
-
-# 从稀疏镜像转换为压缩 DMG —— 这是唯一的生产步骤
+# 打包 DMG: srcfolder 是包含 .app 的目录
+DMG_SRC="$BUILD_DIR/dmg_src"
 DMG_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.dmg"
-ZIP_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.zip"
+rm -rf "$DMG_SRC"
+mkdir -p "$DMG_SRC"
+mv "$APP_DIR" "$DMG_SRC/"
+ln -sf /Applications "$DMG_SRC/Applications"
 
-echo "=== 转换前空间 ==="
-df -h / | tail -1
-du -sh "$DMG_SPARSE" | awk '{print "  稀疏镜像: " $1}'
-
-if hdiutil convert "$DMG_SPARSE" -format UDZO -imagekey zlib-level=9 -o "$DMG_FILE" 2>&1; then
-    echo "  DMG 创建成功"
-    ls -lh "$DMG_FILE"
-    rm -f "$DMG_SPARSE"
+echo "  创建 DMG (srcfolder)..."
+if hdiutil create -volname "FaceFusion4.8" \
+    -srcfolder "$DMG_SRC" \
+    -ov -format UDZO \
+    -imagekey zlib-level=9 \
+    "$DMG_FILE" 2>&1; then
+    echo "  DMG: $(ls -lh "$DMG_FILE" | awk '{print $5}')"
 else
-    echo "  hdiutil convert 失败，回退为 zip"
-    # 重新挂载，用 zip 打包
-    hdiutil attach "$DMG_SPARSE" -noverify -mountpoint "$VOLUME" 2>/dev/null || true
-    cd "$DMG_STAGING"
+    echo "  hdiutil 失败，回退为 zip..."
+    ZIP_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.zip"
+    cd "$DMG_SRC"
     zip -rq "$ZIP_FILE" .
     echo "  ZIP: $(ls -lh "$ZIP_FILE" | awk '{print $5}')"
 fi
 
+echo ""
 echo "=== 最终空间 ==="
 df -h / | tail -1
-echo ""
 echo "==================================================="
 echo " 构建完成!"
-if [ -f "$DMG_FILE" ]; then
-    ls -lh "$DMG_FILE"
-elif [ -f "$ZIP_FILE" ]; then
-    ls -lh "$ZIP_FILE"
-fi
+ls -lh "$BUILD_DIR"/FaceFusion4.8* 2>/dev/null
 echo "==================================================="
