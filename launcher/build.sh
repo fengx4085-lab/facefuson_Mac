@@ -231,28 +231,40 @@ echo "=== 剩余空间 ==="
 df -h / | tail -1
 du -sh "$APP_DIR" 2>/dev/null | awk '{print "  .app: " $1}'
 
-# 打包 DMG: srcfolder 是包含 .app 的目录
+# 打包: 用 ditto 创建 zip（增量流式，不占内存）
+# ditto 是 macOS 原生工具，完美处理 APFS + 硬链接 + 大文件
+ZIP_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.zip"
 DMG_SRC="$BUILD_DIR/dmg_src"
-DMG_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.dmg"
 rm -rf "$DMG_SRC"
 mkdir -p "$DMG_SRC"
 mv "$APP_DIR" "$DMG_SRC/"
 ln -sf /Applications "$DMG_SRC/Applications"
 
-echo "  创建 DMG (srcfolder)..."
-if hdiutil create -volname "FaceFusion4.8" \
-    -srcfolder "$DMG_SRC" \
-    -ov -format UDZO \
-    -imagekey zlib-level=9 \
-    "$DMG_FILE" 2>&1; then
-    echo "  DMG: $(ls -lh "$DMG_FILE" | awk '{print $5}')"
-else
-    echo "  hdiutil 失败，回退为 zip..."
-    ZIP_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.zip"
+echo "  创建归档 (ditto)..."
+APP_BUNDLE="$DMG_SRC/FaceFusion.app"
+ditto -c -k --keepParent --noqtn --noacl "$APP_BUNDLE" "$ZIP_FILE" 2>&1 || {
+    echo "  ditto 失败，尝试 tar.gz..."
+    TAR_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.tar.gz"
     cd "$DMG_SRC"
-    zip -rq "$ZIP_FILE" .
-    echo "  ZIP: $(ls -lh "$ZIP_FILE" | awk '{print $5}')"
+    tar czf "$TAR_FILE" FaceFusion.app 2>&1 || {
+        echo "  tar 也失败，输出原始 .app 目录"
+        ls -la "$DMG_SRC/"
+        exit 1
+    }
+}
+
+echo "=== 最终空间 ==="
+df -h / | tail -1
+echo ""
+echo "==================================================="
+echo " 构建完成!"
+if [ -f "$ZIP_FILE" ]; then
+    echo " ZIP: $(ls -lh "$ZIP_FILE" | awk '{print $5}')"
 fi
+if [ -f "$TAR_FILE" ]; then
+    echo " TAR: $(ls -lh "$TAR_FILE" | awk '{print $5}')"
+fi
+echo "==================================================="
 
 echo ""
 echo "=== 最终空间 ==="
