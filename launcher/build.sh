@@ -190,10 +190,10 @@ echo "  Bundle 组装完成"
 # ══════════════════════════════════════════════════════
 echo "[8/8] 制作 DMG..."
 
-DMG_DIR="$BUILD_DIR/dmg"
-mkdir -p "$DMG_DIR"
-cp -R "$APP_DIR" "$DMG_DIR/"
-ln -sf /Applications "$DMG_DIR/Applications"
+DMG_STAGING="$BUILD_DIR/dmg_staging"
+mkdir -p "$DMG_STAGING"
+mv "$APP_DIR" "$DMG_STAGING/"
+ln -sf /Applications "$DMG_STAGING/Applications"
 
 DMG_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.dmg"
 
@@ -207,10 +207,10 @@ if command -v create-dmg &>/dev/null; then
         --hide-extension "FaceFusion.app" \
         --app-drop-link 480 170 \
         "$DMG_FILE" \
-        "$DMG_DIR/"
+        "$DMG_STAGING/"
 else
     hdiutil create -volname "FaceFusion4.8" \
-        -srcfolder "$DMG_DIR" \
+        -srcfolder "$DMG_STAGING" \
         -ov -format UDZO \
         "$DMG_FILE"
 fi
