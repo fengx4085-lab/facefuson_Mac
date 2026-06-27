@@ -203,40 +203,47 @@ echo "  Bundle 组装完成"
 # ══════════════════════════════════════════════════════
 echo "[8/8] 制作 DMG..."
 
-# 释放磁盘空间：清理 pip 缓存、PyInstaller 构建文件、__pycache__
+# 激进清理：空间紧张，能删的都删
 echo "  清理临时文件以释放空间..."
 rm -rf /tmp/pyi_build "$BUILD_DIR/pyinstaller_dist"
 find "$RESOURCES/venv" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 find "$RESOURCES/facefusion" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
-rm -rf "$RESOURCES/venv"/lib/python3.12/site-packages/pip/_vendor/ 2>/dev/null || true
-# 模型已打包进 .app，删除缓存的副本释放 ~2.5GB
-rm -rf "$CACHE_DIR"/models 2>/dev/null || true
-df -h /Users/runner
-
-DMG_STAGING="$BUILD_DIR/dmg_staging"
-mkdir -p "$DMG_STAGING"
-mv "$APP_DIR" "$DMG_STAGING/"
-ln -sf /Applications "$DMG_STAGING/Applications"
+rm -rf "$RESOURCES/venv/lib/python3.12/site-packages/pip" 2>/dev/null || true
+rm -rf "$CACHE_DIR/models" 2>/dev/null || true
+df -h .
 
 DMG_FILE="$BUILD_DIR/FaceFusion4.8-macOS-arm64.dmg"
+# RW 镜像要比 app 稍大一点
+APP_SIZE_KB=$(du -sk "$APP_DIR" | cut -f1)
+RW_SIZE_MB=$(( (APP_SIZE_KB * 12 / 10) / 1024 + 50 ))
+echo "  App: $(( APP_SIZE_KB / 1024 )) MiB, RW DMG: ${RW_SIZE_MB} MiB"
 
-if command -v create-dmg &>/dev/null; then
-    create-dmg \
-        --volname "FaceFusion4.8" \
-        --window-pos 200 120 \
-        --window-size 660 400 \
-        --icon-size 100 \
-        --icon "FaceFusion.app" 180 170 \
-        --hide-extension "FaceFusion.app" \
-        --app-drop-link 480 170 \
-        "$DMG_FILE" \
-        "$DMG_STAGING/"
-else
-    hdiutil create -volname "FaceFusion4.8" \
-        -srcfolder "$DMG_STAGING" \
-        -ov -format UDZO \
-        "$DMG_FILE"
-fi
+# 创建空的可读写镜像 → 挂载 → 复制 → 删除源 → 卸载 → 压缩转换
+# 优势：复制完 .app 后立即 rm 源文件，峰值空间远低于 -srcfolder 方式
+DMG_RW="$BUILD_DIR/tmp_rw.dmg"
+MOUNT_PT="/tmp/ff_dmg_mnt"
+rm -rf "$MOUNT_PT"
+mkdir -p "$MOUNT_PT"
+
+hdiutil create -size "${RW_SIZE_MB}m" -fs HFS+ -volname "FaceFusion4.8" "$DMG_RW"
+hdiutil attach "$DMG_RW" -readwrite -noverify -noautoopen -mountpoint "$MOUNT_PT"
+
+cp -R "$APP_DIR" "$MOUNT_PT/"
+ln -sf /Applications "$MOUNT_PT/Applications"
+
+# 源 .app 已复制进 DMG，删除释放 ~3 GiB
+rm -rf "$APP_DIR"
+echo "  源已释放: df -h ."
+df -h .
+
+hdiutil detach "$MOUNT_PT" -force
+
+# 转换为压缩 DMG
+hdiutil convert "$DMG_RW" -format UDZO -imagekey zlib-level=9 -o "$DMG_FILE"
+rm -f "$DMG_RW"
+
+echo "  DMG 已创建，最终磁盘: df -h ."
+df -h .
 
 echo ""
 echo "==================================================="
