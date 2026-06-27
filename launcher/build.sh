@@ -38,8 +38,13 @@ if [[ ! "$PY_VER" =~ ^3\.12 ]]; then
 fi
 
 PY_HOME=$(dirname "$(dirname "$PYTHON3")")
-mkdir -p "$RESOURCES/python"
-cp -r "$PY_HOME"/* "$RESOURCES/python/"
+mkdir -p "$RESOURCES/python/bin" "$RESOURCES/python/lib" "$RESOURCES/python/share"
+
+# 用 rsync 逐目录拷贝（跳过 X11 等坏 symlink，忽略权限错误）
+rsync -a "$PY_HOME/bin/"  "$RESOURCES/python/bin/"  || cp -a "$PY_HOME/bin/"*  "$RESOURCES/python/bin/"
+rsync -a "$PY_HOME/lib/"  "$RESOURCES/python/lib/"  || cp -a "$PY_HOME/lib/"*  "$RESOURCES/python/lib/"
+rsync -a "$PY_HOME/share/" "$RESOURCES/python/share/" 2>/dev/null || cp -a "$PY_HOME/share/"* "$RESOURCES/python/share/" 2>/dev/null || true
+cp -a "$PY_HOME/include" "$RESOURCES/python/include" 2>/dev/null || true
 
 if [ ! -f "$RESOURCES/python/bin/python3" ]; then
     mkdir -p "$RESOURCES/python/bin"
