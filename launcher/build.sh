@@ -235,13 +235,8 @@ rm -rf /tmp/pyi_build "$BUILD_DIR/pyinstaller_dist"
 rm -rf "$VOLUME/pyi_build"
 find "$RESOURCES/venv" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
 find "$RESOURCES/facefusion" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
-rm -rf "$RESOURCES/venv/lib/python3.12/site-packages/pip" 2>/dev/null || true
 rm -rf "$RESOURCES/venv/share" 2>/dev/null || true
 rm -rf /tmp/launcher.spec
-
-# .app 已在镜像内，把 ffu-master 源码和缓存模型删掉释放 runner 空间
-rm -rf "$WORK_DIR/facefusion-master" 2>/dev/null || true
-rm -rf "$CACHE_DIR" 2>/dev/null || true
 
 echo "=== 镜像用量 ==="
 df -h "$VOLUME" | tail -1
