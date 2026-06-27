@@ -76,10 +76,23 @@ cp "$WORK_DIR/launcher/patches/locales_with_zh.py" "$RESOURCES/facefusion/facefu
 # Step 4: 预下载 AI 模型
 # ══════════════════════════════════════════════════════
 echo "[4/8] 预下载 AI 模型 (约 2.5 GB，需耐心等待)..."
+MODEL_DIR="$RESOURCES/facefusion/.assets/models"
+CACHE_DIR="$WORK_DIR/facefusion-master/.assets"
+
+# 如果缓存中有模型（Step 3 的 cp 已带入），force-download 会跳过已有文件
+if [ -d "$CACHE_DIR/models" ] && [ "$(ls -1 "$CACHE_DIR/models" 2>/dev/null | wc -l)" -gt 0 ]; then
+    echo "  检测到缓存模型 ($(du -sh "$CACHE_DIR/models" | cut -f1))，将跳过已下载文件"
+fi
+
 export PATH="$RESOURCES:$PATH"
 cd "$RESOURCES/facefusion"
 "$VENV_PYTHON" facefusion.py force-download
 echo "  模型下载完成"
+
+# 写回缓存目录，让 GitHub Actions cache 下次能命中
+mkdir -p "$CACHE_DIR"
+cp -r "$MODEL_DIR" "$CACHE_DIR/"
+echo "  模型已同步至缓存目录"
 
 # ══════════════════════════════════════════════════════
 # Step 5: 下载 ffmpeg + curl
@@ -189,6 +202,16 @@ echo "  Bundle 组装完成"
 # Step 8: 制作 DMG
 # ══════════════════════════════════════════════════════
 echo "[8/8] 制作 DMG..."
+
+# 释放磁盘空间：清理 pip 缓存、PyInstaller 构建文件、__pycache__
+echo "  清理临时文件以释放空间..."
+rm -rf /tmp/pyi_build "$BUILD_DIR/pyinstaller_dist"
+find "$RESOURCES/venv" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+find "$RESOURCES/facefusion" -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+rm -rf "$RESOURCES/venv"/lib/python3.12/site-packages/pip/_vendor/ 2>/dev/null || true
+# 模型已打包进 .app，删除缓存的副本释放 ~2.5GB
+rm -rf "$CACHE_DIR"/models 2>/dev/null || true
+df -h /Users/runner
 
 DMG_STAGING="$BUILD_DIR/dmg_staging"
 mkdir -p "$DMG_STAGING"

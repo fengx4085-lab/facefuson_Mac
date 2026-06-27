@@ -28,7 +28,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: facefusion-master/.assets
-          key: facefusion-models-3.6.1-v2
+          key: facefusion-models-3.6.1-v3
+          restore-keys: |
+            facefusion-models-3.6.1-
 
       - name: Build DMG
         run: |
