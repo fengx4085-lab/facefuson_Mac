@@ -40,11 +40,15 @@ fi
 PY_HOME=$(dirname "$(dirname "$PYTHON3")")
 mkdir -p "$RESOURCES/python/bin" "$RESOURCES/python/lib" "$RESOURCES/python/share"
 
-# 逐目录拷贝（不保留权限/所有者，避免 Permission denied）
-rsync -rl --no-perms --no-owner --no-group "$PY_HOME/bin/"  "$RESOURCES/python/bin/"  || cp -R "$PY_HOME/bin/"*  "$RESOURCES/python/bin/"
-rsync -rl --no-perms --no-owner --no-group "$PY_HOME/lib/"  "$RESOURCES/python/lib/"  || cp -R "$PY_HOME/lib/"*  "$RESOURCES/python/lib/"
-rsync -rl --no-perms --no-owner --no-group "$PY_HOME/share/" "$RESOURCES/python/share/" 2>/dev/null || cp -R "$PY_HOME/share/"* "$RESOURCES/python/share/" 2>/dev/null || true
-cp -R "$PY_HOME/include" "$RESOURCES/python/include" 2>/dev/null || true
+# macOS 原生 ditto：静默跳过权限错误，完美处理 .app bundle
+# ditto 默认行为：
+#   - 保留 symlink（不追踪）
+#   - 能读的权限复制内容，不能设置的属性静默跳过
+#   - 遇到损坏的 symlink 或受限文件不会报错退出
+ditto "$PY_HOME/bin"  "$RESOURCES/python/bin"
+ditto "$PY_HOME/lib"  "$RESOURCES/python/lib"
+ditto "$PY_HOME/share" "$RESOURCES/python/share" 2>/dev/null || true
+ditto "$PY_HOME/include" "$RESOURCES/python/include" 2>/dev/null || true
 
 if [ ! -f "$RESOURCES/python/bin/python3" ]; then
     mkdir -p "$RESOURCES/python/bin"
