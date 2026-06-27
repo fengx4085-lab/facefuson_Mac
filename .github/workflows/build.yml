@@ -12,30 +12,19 @@ jobs:
     timeout-minutes: 120
 
     steps:
-      - name: Free disk space (remove preinstalled bloat)
+      - name: Free disk space
         run: |
-          echo "=== 清理前 ==="
-          df -h /
-          # 删除 GitHub Actions macOS runner 预装的无用工具，释放 ~20-30GB
+          echo "=== 清理前 ===" && df -h /
+          # 删除 Xcode 释放 ~5GB，给稀疏镜像腾空间
           sudo rm -rf /Applications/Xcode*.app 2>/dev/null || true
-          sudo rm -rf /Library/Developer/CommandLineTools 2>/dev/null || true
-          rm -rf ~/Library/Android 2>/dev/null || true
-          rm -rf /usr/local/share/ios 2>/dev/null || true
-          rm -rf /usr/local/lib/android 2>/dev/null || true
-          # 删除 .NET, Haskell, Ruby, PHP, Mono 等
-          rm -rf /usr/local/.ghcup 2>/dev/null || true
+          # 清理 Runner 工具集
+          rm -rf /opt/hostedtoolcache 2>/dev/null || true
           rm -rf /Users/runner/.dotnet 2>/dev/null || true
           rm -rf /Users/runner/.cargo 2>/dev/null || true
-          rm -rf /usr/local/opt/php* 2>/dev/null || true
-          rm -rf /usr/local/opt/ruby* 2>/dev/null || true
-          rm -rf /usr/local/opt/mono* 2>/dev/null || true
-          rm -rf /usr/local/share/dotnet 2>/dev/null || true
-          rm -rf /opt/hostedtoolcache 2>/dev/null || true
-          # 清理 Homebrew 缓存
-          brew cleanup --prune=all 2>/dev/null || true
+          rm -rf /usr/local/.ghcup 2>/dev/null || true
+          rm -rf /usr/local/lib/android 2>/dev/null || true
           rm -rf "$(brew --cache)" 2>/dev/null || true
-          echo "=== 清理后 ==="
-          df -h /
+          echo "=== 清理后 ===" && df -h /
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,9 +34,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Setup Homebrew
+      - name: Install ffmpeg/curl/tkinter
         run: |
-          brew install create-dmg ffmpeg curl python-tk@3.12 2>/dev/null || true
+          brew install python-tk@3.12 2>/dev/null || true
+          echo "  ffmpeg: $(which ffmpeg) → $(ffmpeg -version 2>&1 | head -1 || echo 'built-in')"
+          echo "  curl:   $(which curl) → $(curl --version 2>&1 | head -1)"
 
       - name: Cache FaceFusion models
         uses: actions/cache@v4
@@ -74,9 +65,9 @@ jobs:
       - name: Upload to Release (if tag)
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          DMG_FILE="$(ls build/FaceFusion4.8-macOS-arm64.* 2>/dev/null | head -1)"
+          RELEASE_FILE="$(ls build/FaceFusion4.8-macOS-arm64.* 2>/dev/null | head -1)"
           gh release create "$GITHUB_REF_NAME" \
-            "$DMG_FILE" \
+            "$RELEASE_FILE" \
             --title "FaceFusion4.8 黄金定制版 $GITHUB_REF_NAME" \
             --notes "FaceFusion4.8 黄金定制版 macOS DMG 整合包"
         env:
