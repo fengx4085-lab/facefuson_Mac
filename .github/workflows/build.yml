@@ -34,10 +34,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install ffmpeg/curl/tkinter
+      - name: Install dependencies
         run: |
-          brew install python-tk@3.12 2>/dev/null || true
-          echo "  ffmpeg: $(which ffmpeg) → $(ffmpeg -version 2>&1 | head -1 || echo 'built-in')"
+          brew install ffmpeg curl python-tk@3.12 2>/dev/null || true
+          echo "  ffmpeg: $(which ffmpeg) → $(ffmpeg -version 2>&1 | head -1)"
           echo "  curl:   $(which curl) → $(curl --version 2>&1 | head -1)"
 
       - name: Cache FaceFusion models
